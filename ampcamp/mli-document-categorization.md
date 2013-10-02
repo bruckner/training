@@ -32,8 +32,6 @@ From a console, we'll register the MLI library with Spark, start a Spark shell,
 and create an `MLContext`, which is similar to a `SparkContext`.
 
 
-<div class ="codetabs">
-<div data-lang="scala" markdown="1">
 At the bash shell prompt, run
 
 ```
@@ -43,13 +41,10 @@ export ADD_JARS=/root/MLI/target/MLI-assembly-1.0.jar
 
 In the Spark shell, run
 
-```
+```scala
 import mli.interface._
 val mc = new MLContext(sc)
 ```
-
-</div>
-</div>
 
 From here onwards, we'll run all of our commands in the Spark shell.
 
@@ -80,9 +75,7 @@ First, we'll load our data and take a look at it.
 MLI offers several convenient ways to load data directly into distributed tables.
 We'll use one of those methods, `mc.loadFile`, to load and inspect our data.
 
-<div class="codetabs">
-<div data-lang="scala" markdown="1">
-```
+```scala
 val inputTable = mc.loadFile("/enwiki_txt").filter(r => List("ARTS","LIFE") contains r(0).toString).cache()
 val firstFive = inputTable.take(5)
 val taggedInputTable = inputTable.project(Seq(0,2)).map(r => {
@@ -90,8 +83,6 @@ val taggedInputTable = inputTable.project(Seq(0,2)).map(r => {
     MLRow(label, r(1))
 }).cache()
 ```
-</div>
-</div>
 
 The first command loads data into an `MLTable`.
 An `MLTable` is a distributed collection of `MLRow`, all of which
@@ -124,9 +115,7 @@ Finally, we remove data points that don't have at least 5 features and scale the
 The featurization job will take about 5 minutes to run on your cluster, so
 let's start it now:
 
-<div class="codetabs">
-<div data-lang="scala" markdown="1">
-```
+```scala
 import mli.feat._
 // c is the column on which we want to perform N-gram extraction
 // n is the N-gram length, e.g., n=2 corresponds to bigrams
@@ -134,8 +123,6 @@ import mli.feat._
 val (featurizedData, ngfeaturizer) = NGrams.extractNGrams(taggedInputTable, c=1, n=2, k=1000, stopWords = NGrams.stopWords)
 val (scaledData, featurizer) = Scale.scale(featurizedData.filter(_.nonZeros.length > 5).cache(), 0, ngfeaturizer)
 ```
-</div>
-</div>
 
 While we wait for this job to finish, let's do a couple of exercises to get
 some more intuition about N-grams and understand what's happening under the
@@ -149,10 +136,7 @@ string.  Given a string, convert it to lower case, tokenize it by splitting on
 word boundaries (spaces), and output a set of all adjacent "word1_word2" pairs that
 occur in the input string.
 
-<div class="codetabs">
-<div data-lang="scala" markdown="1">
-<div class="solution" markdown="1">
-```
+```scala
 def bigram(s: String): Set[String] = {
     s.toLowerCase.split(" ").sliding(2).map(_.mkString("_")).toSet
 }
@@ -161,9 +145,6 @@ bigram("How does bigramming work on a test string")
 // This should output
 // res2: Set[String] = Set(on_a, a_test, test_string, does_bigramming, bigramming_work, how_does, work_on)
 ```
-</div>
-</div>
-</div>
 
 Once we compute all of a document's N-grams, we could theoretically represent
 the document using these N-grams.  However, the full set of N-grams in
@@ -188,10 +169,7 @@ document contains that bigram. The output of this function is a "feature
 vector".
 
 
-<div class="codetabs">
-<div data-lang="scala" markdown="1">
-<div class="solution" markdown="1">
-```
+```scala
 def bigramFeature(s: Set[String], orderedGrams: Seq[String]): Seq[Double] = {
     orderedGrams.map(g => if(s.contains(g)) 1.0 else 0.0)
 }
@@ -200,9 +178,6 @@ bigramFeature(bigram("This is a test string"), List("is_a", "test_string", "flyi
 // This should output
 // res5: Seq[Double] = List(1.0, 1.0, 0.0)
 ```
-</div>
-</div>
-</div>
 
 By now, hopefully the cluster has completed our featurization job.
 
@@ -219,13 +194,9 @@ documents in a [later section](#test-the-model-on-new-data).
 
 An important concept in supervised machine learning is *training error* vs. *testing error*. Since we are generally less interested in how our model works on the data it was trained on than how it works on *new data*, we need to create a *test set* (sometimes also called a *holdout set*). MLI provides a function to split up your data randomly into train set vs. test set. By default, it will make the training set 90% of your input data, and the testing set the remaining 10%.
 
-<div class="codetabs">
-<div data-lang="scala" markdown="1">
-```
+```scala
 val (trainData, testData) = MLTableUtils.trainTest(scaledData)
 ```
-</div>
-</div>
 
 We will train our model on the *training set* and evaluate it on the *testing set.*
 
@@ -236,61 +207,41 @@ We will train our model on the *training set* and evaluate it on the *testing se
 
 Recall that our [featurization process](#command-line-preprocessing-and-featurization) created a 1,000-dimensional feature vector for each article in our Wikipedia dataset, with each vector entry summarizing the contents of that page in the form of the top 1,000 bigrams appearing in the corpus. Now, let's train a model on those features:
 
-<div class="codetabs">
-<div data-lang="scala" markdown="1">
-```
+```scala
 import mli.ml.classification._
 val model = SVMAlgorithm.train(trainData, SVMParameters(learningRate=10.0, regParam=1.0, maxIterations=50))
 ```
-</div>
-</div>
 
 ## Model assessment
 Now that we've built a model, what can we do with it?
 
 First, let's see how to make predictions using our model.  The following code demonstrates how to generate a prediction from the first data point in our training set.
 
-<div class="codetabs">
-<div data-lang="scala" markdown="1">
-```
+```scala
 // note: take(1) returns a sequence with a single MLRow, and we want this MLRow
 val firstDataPoint = trainData.take(1)(0)
 model.predict(firstDataPoint.tail)
 ```
-</div>
-</div>
 
 **Exercise:** Next, create an `MLTable` where the first column is the true label and the second column is the predicted label generated by our trained model. Hint: map each row of `featurizedData` into a two-dimensional `MLRow`, with the first element being the true label (the first column of `featurizedData`) and the second element being the model prediction (generated as shown above).
 
-<div class="codetabs">
-<div data-lang="scala" markdown="1">
-<div class="solution" markdown="1">
-```
+```scala
 val trainVsPred = trainData.map(r => MLRow(r(0), model.predict(r.tail)))
 ```
-</div>
-</div>
-</div>
 
 Now, let's compute the model's "training error" --- that is, how well it performs on the data it was trained on.
 We'll calculate the training error by computing the fraction of incorrect predictions.
 To do this, we test for equality between the two elements of each MLRow, and count the number of inequalities (mispredictions).
 
-<div class="codetabs">
-<div data-lang="scala" markdown="1">
-```
+```scala
 val trainError = trainVsPred.filter(r => r(0) != r(1)).numRows.toDouble/trainData.numRows
 ```
-</div>
-</div>
 
 What does this mean? It means that if we give the model the same points that it was trained with, it will classify `trainError` percent of them incorrectly.
 
 Define the following function at your scala prompt --- it will be used to evaluate models later:
 
-<div class="codetabs">
-<div data-lang="scala" markdown="1">
-```
+```scala
 def evalModel(model: SVMModel, testData: MLTable) = {
     val trainData = model.trainingData
     val trainVsPred = trainData.map(r => MLRow(r(0), model.predict(r.tail)))
@@ -300,22 +251,16 @@ def evalModel(model: SVMModel, testData: MLTable) = {
     (trainErr, testErr)
 }
 ```
-</div>
-</div>
 
 ## Feature importance
 Next, let's drill into our model to figure out which features are important.
 Let's sort the features by their weight and look at the most and least important features:
 
-<div class="codetabs">
-<div data-lang="scala" markdown="1">
-```
+```scala
 // This will match the features to our N-Grams and tell us which ones are most interesting.
 val topFeatures = model.features.sortWith(_._2 < _._2).take(10)
 val bottomFeatures = model.features.sortWith(_._2 > _._2).take(10)
 ```
-</div>
-</div>
 
 
 ## Parameter Tuning
@@ -327,10 +272,7 @@ a good model in the required number of iterations.
 
 **Exercise:** Train a model for several different values of `learningRate`.  Calculate the training error for each model and report the `learningRate` that minimizes the error. (Hint: Try moving in steps of 10x = e.g. `learningRate` = 0.0001, 0.001, 0.01, ...)
 
-<div class="codetabs">
-<div data-lang="scala" markdown="1">
-<div class="solution" markdown="1">
-```
+```scala
 val learningRates = List(0.00001, 0.0001, 0.001, 0.01, 0.1, 1.0, 10.0, 100.0, 1000.0)
 
 val models = learningRates.map({lr =>
@@ -344,19 +286,12 @@ val sortedParams = learningRates.zip(modelErrors)
 //Best model is the one with lowest test error.
 val bestModel = models(modelErrors.map(_._2).zipWithIndex.min._2)
 ```
-</div>
-</div>
-</div>
 
 If we look at `sortedParams`, we can see that the models are very sensitive to learning rate and indeed need a learning rate of "1.0" for this number of iterations. To evaluate the performance of `bestModel` we can simply run the following:
 
-<div class="codetabs">
-<div data-lang="scala" markdown="1">
-```
+```scala
 evalModel(bestModel, testData)
 ```
-</div>
-</div>
 
 This indicates that this model has a 25.5% training error, and a 24.7% test error --- usually test error is worse than training error, but in this case the test error is a little bit better.
 
@@ -366,9 +301,7 @@ Now that we're pretty sure we've built a good model, let's see how well it class
 
 Let's create a new `TextModel`, which expects a model and a featurizer and uses them to classify arbitrary text.
 
-<div class="codetabs">
-<div data-lang="scala" markdown="1">
-```
+```scala
 // You should still have your featurizer from the initial featurization process!
 import mli.ml._
 val textModel = new TextModel(bestModel, (s: MLString) => featurizer(MLRow(1.0, s)).tail)
@@ -378,8 +311,6 @@ textModel.predict(MLString(Some(scala.io.Source.fromURL("http://en.wikipedia.org
 
 textModel.predict(MLString(Some(scala.io.Source.fromURL("http://en.wikipedia.org/wiki/Death").mkString)))
 ```
-</div>
-</div>
 
 What classes did the model predict? Was it right?
 
@@ -410,10 +341,7 @@ vectors, compute their total document frequency. (Hint: `MLVector` supports the
 "plus" operation for elementwise addition. Once you have this, compute the
 TF-IDF statistic on the original vector.)
 
-<div class="codetabs">
-<div data-lang="scala" markdown="1">
-<div class="solution" markdown="1">
-```
+```scala
 def documentFrequency(features: Set[MLVector]): MLVector = {
     features.reduce(_ plus _)
 }
@@ -423,10 +351,6 @@ def tfIdf(features: Set[MLVector]): Set[MLVector] = {
     features.map(_ over df)
 }
 ```
-</div>
-</div>
-</div>
-
 
 **Bonus Exercise:** Using the TF-IDF features, repeat the previous steps (model training,
 training data evaluation, feature importance, parameter tuning, and evaluating on test data).
