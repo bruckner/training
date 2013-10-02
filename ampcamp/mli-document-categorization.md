@@ -36,17 +36,17 @@ and create an `MLContext`, which is similar to a `SparkContext`.
 <div data-lang="scala" markdown="1">
 At the bash shell prompt, run
 
-~~~
+```
 export ADD_JARS=/root/MLI/target/MLI-assembly-1.0.jar
 /root/spark/spark-shell
-~~~
+```
 
 In the Spark shell, run
 
-~~~
+```
 import mli.interface._
 val mc = new MLContext(sc)
-~~~
+```
 
 </div>
 </div>
@@ -82,14 +82,14 @@ We'll use one of those methods, `mc.loadFile`, to load and inspect our data.
 
 <div class="codetabs">
 <div data-lang="scala" markdown="1">
-~~~
+```
 val inputTable = mc.loadFile("/enwiki_txt").filter(r => List("ARTS","LIFE") contains r(0).toString).cache()
 val firstFive = inputTable.take(5)
 val taggedInputTable = inputTable.project(Seq(0,2)).map(r => {
     val label = if(r(0).toString == "ARTS") 1.0 else -1.0
     MLRow(label, r(1))
 }).cache()
-~~~
+```
 </div>
 </div>
 
@@ -126,14 +126,14 @@ let's start it now:
 
 <div class="codetabs">
 <div data-lang="scala" markdown="1">
-~~~
+```
 import mli.feat._
 // c is the column on which we want to perform N-gram extraction
 // n is the N-gram length, e.g., n=2 corresponds to bigrams
 // k is the number of top N-grams we want to use (sorted by N-gram frequency)
 val (featurizedData, ngfeaturizer) = NGrams.extractNGrams(taggedInputTable, c=1, n=2, k=1000, stopWords = NGrams.stopWords)
 val (scaledData, featurizer) = Scale.scale(featurizedData.filter(_.nonZeros.length > 5).cache(), 0, ngfeaturizer)
-~~~
+```
 </div>
 </div>
 
@@ -152,7 +152,7 @@ occur in the input string.
 <div class="codetabs">
 <div data-lang="scala" markdown="1">
 <div class="solution" markdown="1">
-~~~
+```
 def bigram(s: String): Set[String] = {
     s.toLowerCase.split(" ").sliding(2).map(_.mkString("_")).toSet
 }
@@ -160,7 +160,7 @@ def bigram(s: String): Set[String] = {
 bigram("How does bigramming work on a test string")
 // This should output
 // res2: Set[String] = Set(on_a, a_test, test_string, does_bigramming, bigramming_work, how_does, work_on)
-~~~
+```
 </div>
 </div>
 </div>
@@ -191,7 +191,7 @@ vector".
 <div class="codetabs">
 <div data-lang="scala" markdown="1">
 <div class="solution" markdown="1">
-~~~
+```
 def bigramFeature(s: Set[String], orderedGrams: Seq[String]): Seq[Double] = {
     orderedGrams.map(g => if(s.contains(g)) 1.0 else 0.0)
 }
@@ -199,7 +199,7 @@ def bigramFeature(s: Set[String], orderedGrams: Seq[String]): Seq[Double] = {
 bigramFeature(bigram("This is a test string"), List("is_a", "test_string", "flying_porpoise"))
 // This should output
 // res5: Seq[Double] = List(1.0, 1.0, 0.0)
-~~~
+```
 </div>
 </div>
 </div>
@@ -221,9 +221,9 @@ An important concept in supervised machine learning is *training error* vs. *tes
 
 <div class="codetabs">
 <div data-lang="scala" markdown="1">
-~~~
+```
 val (trainData, testData) = MLTableUtils.trainTest(scaledData)
-~~~
+```
 </div>
 </div>
 
@@ -238,10 +238,10 @@ Recall that our [featurization process](#command-line-preprocessing-and-featuriz
 
 <div class="codetabs">
 <div data-lang="scala" markdown="1">
-~~~
+```
 import mli.ml.classification._
 val model = SVMAlgorithm.train(trainData, SVMParameters(learningRate=10.0, regParam=1.0, maxIterations=50))
-~~~
+```
 </div>
 </div>
 
@@ -252,11 +252,11 @@ First, let's see how to make predictions using our model.  The following code de
 
 <div class="codetabs">
 <div data-lang="scala" markdown="1">
-~~~
+```
 // note: take(1) returns a sequence with a single MLRow, and we want this MLRow
 val firstDataPoint = trainData.take(1)(0)
 model.predict(firstDataPoint.tail)
-~~~
+```
 </div>
 </div>
 
@@ -265,9 +265,9 @@ model.predict(firstDataPoint.tail)
 <div class="codetabs">
 <div data-lang="scala" markdown="1">
 <div class="solution" markdown="1">
-~~~
+```
 val trainVsPred = trainData.map(r => MLRow(r(0), model.predict(r.tail)))
-~~~
+```
 </div>
 </div>
 </div>
@@ -278,9 +278,9 @@ To do this, we test for equality between the two elements of each MLRow, and cou
 
 <div class="codetabs">
 <div data-lang="scala" markdown="1">
-~~~
+```
 val trainError = trainVsPred.filter(r => r(0) != r(1)).numRows.toDouble/trainData.numRows
-~~~
+```
 </div>
 </div>
 
@@ -290,7 +290,7 @@ Define the following function at your scala prompt --- it will be used to evalua
 
 <div class="codetabs">
 <div data-lang="scala" markdown="1">
-~~~
+```
 def evalModel(model: SVMModel, testData: MLTable) = {
     val trainData = model.trainingData
     val trainVsPred = trainData.map(r => MLRow(r(0), model.predict(r.tail)))
@@ -299,7 +299,7 @@ def evalModel(model: SVMModel, testData: MLTable) = {
     val testErr = testVsPred.filter(r => r(0).toNumber != r(1).toNumber).numRows.toDouble / testData.numRows
     (trainErr, testErr)
 }
-~~~
+```
 </div>
 </div>
 
@@ -309,11 +309,11 @@ Let's sort the features by their weight and look at the most and least important
 
 <div class="codetabs">
 <div data-lang="scala" markdown="1">
-~~~
+```
 // This will match the features to our N-Grams and tell us which ones are most interesting.
 val topFeatures = model.features.sortWith(_._2 < _._2).take(10)
 val bottomFeatures = model.features.sortWith(_._2 > _._2).take(10)
-~~~
+```
 </div>
 </div>
 
@@ -330,7 +330,7 @@ a good model in the required number of iterations.
 <div class="codetabs">
 <div data-lang="scala" markdown="1">
 <div class="solution" markdown="1">
-~~~
+```
 val learningRates = List(0.00001, 0.0001, 0.001, 0.01, 0.1, 1.0, 10.0, 100.0, 1000.0)
 
 val models = learningRates.map({lr =>
@@ -343,7 +343,7 @@ val sortedParams = learningRates.zip(modelErrors)
 
 //Best model is the one with lowest test error.
 val bestModel = models(modelErrors.map(_._2).zipWithIndex.min._2)
-~~~
+```
 </div>
 </div>
 </div>
@@ -352,9 +352,9 @@ If we look at `sortedParams`, we can see that the models are very sensitive to l
 
 <div class="codetabs">
 <div data-lang="scala" markdown="1">
-~~~
+```
 evalModel(bestModel, testData)
-~~~
+```
 </div>
 </div>
 
@@ -368,7 +368,7 @@ Let's create a new `TextModel`, which expects a model and a featurizer and uses 
 
 <div class="codetabs">
 <div data-lang="scala" markdown="1">
-~~~
+```
 // You should still have your featurizer from the initial featurization process!
 import mli.ml._
 val textModel = new TextModel(bestModel, (s: MLString) => featurizer(MLRow(1.0, s)).tail)
@@ -377,7 +377,7 @@ val textModel = new TextModel(bestModel, (s: MLString) => featurizer(MLRow(1.0, 
 textModel.predict(MLString(Some(scala.io.Source.fromURL("http://en.wikipedia.org/wiki/Got_Live_If_You_Want_It!_(album)").mkString)))
 
 textModel.predict(MLString(Some(scala.io.Source.fromURL("http://en.wikipedia.org/wiki/Death").mkString)))
-~~~
+```
 </div>
 </div>
 
@@ -413,7 +413,7 @@ TF-IDF statistic on the original vector.)
 <div class="codetabs">
 <div data-lang="scala" markdown="1">
 <div class="solution" markdown="1">
-~~~
+```
 def documentFrequency(features: Set[MLVector]): MLVector = {
     features.reduce(_ plus _)
 }
@@ -422,7 +422,7 @@ def tfIdf(features: Set[MLVector]): Set[MLVector] = {
     val df = documentFrequency(features)
     features.map(_ over df)
 }
-~~~
+```
 </div>
 </div>
 </div>
